@@ -1,0 +1,55 @@
+version: '3.7'
+
+services:
+  postgres:
+    env_file:
+      - ./envs/postgres.env
+
+  integration:
+    env_file:
+      - ./envs/jira.env
+      - ./envs/postgres.env
+      - ./envs/salt.env
+    environment:
+      FLASK_ENV: 'development'
+    ports:
+      - '8080:8080'
+    volumes:
+      - ./integration/etc/supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro
+      - ./integration/integration.py:/usr/src/app/integration.py:ro
+      - ./integration/jira_patch.py:/usr/src/app/jira_patch.py:ro
+      - ./integration/pepper_patch.py:/usr/src/app/pepper_patch.py:ro
+    depends_on:
+      - salt_master
+      - salt_minion
+
+  salt_master:
+    build: ./salt_master/
+    restart: unless-stopped
+    hostname: master
+    ports:
+      - '8000:8000'
+      - '4505:4505'
+      - '4506:4506'
+    volumes:
+      - ./salt_master/etc/supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro
+      - ./salt_master/etc/salt/master.d/:/etc/salt/master.d/:ro
+      - ./salt_master/srv/salt/:/srv/salt/:ro
+      - salt_master_pki:/etc/salt/pki/
+    depends_on:
+      - postgres
+
+  salt_minion:
+    build: ./salt_minion/
+    restart: unless-stopped
+    hostname: linux1
+    volumes:
+      - ./salt_minion/etc/supervisor/supervisord.conf:/etc/supervisor/supervisord.conf:ro
+      - ./salt_minion/etc/salt/minion.d/minion.conf:/etc/salt/minion.d/minion.conf:ro
+      - salt_minion_pki:/etc/salt/pki/
+    depends_on:
+      - salt_master
+
+volumes:
+  salt_master_pki:
+  salt_minion_pki:
